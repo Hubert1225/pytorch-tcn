@@ -36,7 +36,7 @@ class TemporalConv1d(nn.Conv1d):
             out_channels = out_channels,
             kernel_size = kernel_size,
             stride = stride,
-            padding = 0, # Padding is reimplemented in this class
+            padding = 0, # Padding is reimplemented in this class, set -1 for no padding
             dilation = dilation,
             groups = groups,
             bias = bias,
@@ -46,13 +46,15 @@ class TemporalConv1d(nn.Conv1d):
             )
         
         # Padding is computed internally
-        if padding != 0:
+        if padding not in (0, -1):
             if os.environ.get( 'PYTORCH_TCN_ALLOW_DROP_IN', 'Not set' ) == '0':
                 warnings.warn(
                     """
-                    The value of arg 'padding' must be 0 for TemporalConv1d, because the correct amount
+                    The value of arg 'padding' must be 0 or -1
+                    for TemporalConv1d. When 0, then the correct amount
                     of padding is calculated automatically based on the kernel size and dilation.
                     The value of 'padding' will be ignored.
+                    When -1, then no padding is used
                     """
                     )
             elif os.environ.get( 'PYTORCH_TCN_ALLOW_DROP_IN', 'Not set' ) == '1':
@@ -60,8 +62,10 @@ class TemporalConv1d(nn.Conv1d):
             else:
                 raise ValueError(
                     """
-                    The value of arg 'padding' must be 0 for TemporalConv1d, because the correct amount
+                    The value of arg 'padding' must be 0 or -1
+                    for TemporalConv1d. When 0, then the correct amount
                     of padding is calculated automatically based on the kernel size and dilation.
+                    When -1, then no padding is used.
                     If you want to suppress this error in order to use the layer as drop-in replacement
                     for nn.Conv1d, set the environment variable 'PYTORCH_TCN_ALLOW_DROP_IN' to '0'
                     (will reduce error to a warning) or '1' (will suppress the error/warning entirely).
@@ -77,7 +81,7 @@ class TemporalConv1d(nn.Conv1d):
                 """
                 )
 
-        self.pad_len = (kernel_size - 1) * dilation
+        self.pad_len = None if padding == -1 else (kernel_size - 1) * dilation
         self.causal = causal
         
         self.padder = TemporalPad1d(
@@ -86,7 +90,7 @@ class TemporalConv1d(nn.Conv1d):
             buffer = buffer,
             padding_mode = padding_mode,
             causal = causal,
-            )
+            ) if self.pad_len is not None else None
         
         return
     
@@ -117,7 +121,8 @@ class TemporalConv1d(nn.Conv1d):
                 to the argument 'buffer_io'.
                 """
                 )
-        x = self.padder(x, inference=inference, buffer_io=buffer_io)
+        if self.padder:
+            x = self.padder(x, inference=inference, buffer_io=buffer_io)
         x = super().forward(x)
         return x
     
