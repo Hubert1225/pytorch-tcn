@@ -148,7 +148,7 @@ class TemporalConvTranspose1d(nn.ConvTranspose1d):
             out_channels,
             kernel_size,
             stride = 1,
-            padding = 0,
+            padding = 0,  # set -1 for no padding, otherwise computed automatically
             output_padding = 0,
             groups = 1,
             bias = True,
@@ -162,13 +162,16 @@ class TemporalConvTranspose1d(nn.ConvTranspose1d):
             ):
         
         # Padding is computed internally
-        if padding != 0:
+        if padding not in (0, -1):
             if os.environ.get( 'PYTORCH_TCN_ALLOW_DROP_IN', 'Not set' ) == '0':
                 warnings.warn(
                     """
-                    The value of arg 'padding' must be 0 for TemporalConv1d, because the correct amount
+                    The value of arg 'padding' must be 0 or -1 for TemporalConvTranspose1d, because the correct amount
+                    of padding is calculated automatically based on the kernel size and dilation.
+                    If 0, then the correct amount
                     of padding is calculated automatically based on the kernel size and dilation.
                     The value of 'padding' will be ignored.
+                    If -1, then no padding is used.
                     """
                     )
             elif os.environ.get( 'PYTORCH_TCN_ALLOW_DROP_IN', 'Not set' ) == '1':
@@ -176,8 +179,9 @@ class TemporalConvTranspose1d(nn.ConvTranspose1d):
             else:
                 raise ValueError(
                     """
-                    The value of arg 'padding' must be 0 for TemporalConv1d, because the correct amount
+                    The value of arg 'padding' must be 0 or -1 for TemporalConvTranspose1d. If 0, then the correct amount
                     of padding is calculated automatically based on the kernel size and dilation.
+                    If -1, then no padding is used.
                     If you want to suppress this error in order to use the layer as drop-in replacement
                     for nn.Conv1d, set the environment variable 'PYTORCH_TCN_ALLOW_DROP_IN' to '0'
                     (will reduce error to a warning) or '1' (will suppress the error/warning entirely).
@@ -251,8 +255,9 @@ class TemporalConvTranspose1d(nn.ConvTranspose1d):
         self.causal = causal                      
         self.upsampling_factor = stride
         self.buffer_size = (kernel_size // stride) - 1
+        self.no_padding = padding == -1
 
-        if self.causal:
+        if self.no_padding or self.causal:
             #self.pad_left = self.buffer_size
             #self.pad_right = 0
             self.implicit_padding = 0
@@ -281,7 +286,7 @@ class TemporalConvTranspose1d(nn.ConvTranspose1d):
             in_channels = in_channels,
             padding_mode = padding_mode,
             causal = causal,
-            )
+            ) if not self.no_padding else None
 
         # Deprecated in pytorch-tcn >= 1.2.2
         # Keep for backwards compatibility to load old model weights
@@ -314,13 +319,14 @@ class TemporalConvTranspose1d(nn.ConvTranspose1d):
                 """
                 )
         if self.causal:
-            x = self.padder(x, inference=inference, buffer_io=buffer_io)
+            if not self.no_padding:
+                x = self.padder(x, inference=inference, buffer_io=buffer_io)
             x = super().forward(x)
             x = x[:, :, self.upsampling_factor : -self.upsampling_factor]
         else:
             x = super().forward(x)
             # if stride is odd, remove last element due to padding
-            if self.upsampling_factor % 2 == 1:
+            if not self.no_padding and self.upsampling_factor % 2 == 1:
                 x = x[..., :-1]
         return x
     
