@@ -601,7 +601,7 @@ class TCN(BaseTCN):
         else:
             self.activation_out = None #nn.Identity()
 
-        if self.causal:
+        if self.causal and not no_padding:
             self.reset_buffers()
         return
     
