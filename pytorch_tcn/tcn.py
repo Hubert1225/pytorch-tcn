@@ -412,15 +412,15 @@ class TemporalBlock(BaseTCN):
         if self.no_padding:
             output_size = (
                 lambda input_size, kernel_size, dilation, stride:
-                (input_size - kernel_size - (kernel_size - 1)*(dilation - 1))/stride + 1
+                int((input_size - kernel_size - (kernel_size - 1)*(dilation - 1))/stride + 1)
             )
             x = F.adaptive_avg_pool1d(
                 x,
-                output_size(x.shape[-1], self.conv1.kernel_size, self.conv1.dilation, self.conv1.stride)
+                output_size(x.shape[-1], self.conv1.kernel_size[0], self.conv1.dilation[0], self.conv1.stride[0])
             )
             x = F.adaptive_avg_pool1d(
                 x,
-                output_size(x.shape[-1], self.conv2.kernel_size, self.conv2.dilation, self.conv2.stride)
+                output_size(x.shape[-1], self.conv2.kernel_size[0], self.conv2.dilation[0], self.conv2.stride[0])
             )
         res = x if self.downsample is None else self.downsample(x)
         return self.activation_final(out + res), out
