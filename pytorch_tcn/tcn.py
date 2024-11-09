@@ -206,7 +206,8 @@ class TemporalBlock(BaseTCN):
             kerner_initializer,
             embedding_shapes,
             embedding_mode,
-            use_gate
+            use_gate,
+            no_padding=False,
             ):
         super(TemporalBlock, self).__init__()
         self.use_norm = use_norm
@@ -229,7 +230,8 @@ class TemporalBlock(BaseTCN):
             kernel_size=kernel_size,
             stride=stride,
             dilation=dilation,
-            causal=self.causal
+            causal=self.causal,
+            padding=(-1 if no_padding else 0)
             )
 
         self.conv2 = TemporalConv1d(
@@ -238,8 +240,11 @@ class TemporalBlock(BaseTCN):
             kernel_size=kernel_size,
             stride=stride,
             dilation=dilation,
-            causal=self.causal
+            causal=self.causal,
+            padding=(-1 if no_padding else 0)
             )
+
+        self.no_padding = no_padding
         
         if use_norm == 'batch_norm':
             if self.use_gate:
@@ -404,6 +409,19 @@ class TemporalBlock(BaseTCN):
         out = self.activation2(out)
         out = self.dropout2(out)
 
+        if self.no_padding:
+            output_size = (
+                lambda input_size, kernel_size, dilation, stride:
+                (input_size - kernel_size - (kernel_size - 1)*(dilation - 1))/stride + 1
+            )
+            x = F.adaptive_avg_pool1d(
+                x,
+                output_size(x.shape[-1], self.conv1.kernel_size, self.conv1.dilation, self.conv1.stride)
+            )
+            x = F.adaptive_avg_pool1d(
+                x,
+                output_size(x.shape[-1], self.conv2.kernel_size, self.conv2.dilation, self.conv2.stride)
+            )
         res = x if self.downsample is None else self.downsample(x)
         return self.activation_final(out + res), out
 
