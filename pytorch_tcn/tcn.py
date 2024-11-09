@@ -448,8 +448,14 @@ class TCN(BaseTCN):
             lookahead=0,
             output_projection: Optional[ int ] = None,
             output_activation: Optional[ str ] = None,
+            no_padding=False,
             ):
         super(TCN, self).__init__()
+
+        if no_padding and use_skip_connections:
+            raise ValueError("Skip connections are not supported in the no-padding"
+                             "option. `no_padding` and `use_skip_connections"
+                             "must not be set simultaneously to `True`.")
 
         if lookahead > 0:
             # Only lookahead of 0 is supported, parameter is kept for compatibility
@@ -571,7 +577,8 @@ class TCN(BaseTCN):
                     kerner_initializer=self.kernel_initializer,
                     embedding_shapes=self.embedding_shapes,
                     embedding_mode=self.embedding_mode,
-                    use_gate=self.use_gate
+                    use_gate=self.use_gate,
+                    no_padding=no_padding,
                     )
                 ]
 
